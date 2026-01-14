@@ -106,6 +106,26 @@ func copyActionNames(_ element: AXUIElement) -> [String] {
     return array
 }
 
+func orNull<T>(_ value: T?) -> Any {
+    return value ?? NSNull()
+}
+
+func asAXValue(_ value: Any) -> AXValue? {
+    let cfValue = value as CFTypeRef
+    if CFGetTypeID(cfValue) == AXValueGetTypeID() {
+        return (value as! AXValue)
+    }
+    return nil
+}
+
+func asAXUIElement(_ value: Any) -> AXUIElement? {
+    let cfValue = value as CFTypeRef
+    if CFGetTypeID(cfValue) == AXUIElementGetTypeID() {
+        return (value as! AXUIElement)
+    }
+    return nil
+}
+
 func firstStringAttribute(_ element: AXUIElement, _ attributes: [String]) -> String? {
     for attr in attributes {
         if let value = copyAttribute(element, attr) {
@@ -159,7 +179,7 @@ func toJSONValue(_ value: Any) -> Any {
     if let str = value as? String { return str }
     if let num = value as? NSNumber { return num }
     if let boolVal = value as? Bool { return boolVal }
-    if let axVal = value as? AXValue { return axValueToJSON(axVal) }
+    if let axVal = asAXValue(value) { return axValueToJSON(axVal) }
     if let arr = value as? [Any] { return arr.map { toJSONValue($0) } }
     if let dict = value as? [String: Any] {
         var out: [String: Any] = [:]
@@ -189,7 +209,8 @@ func getSnapshotContext() throws -> SnapshotContext {
     let appElement = AXUIElementCreateApplication(app.processIdentifier)
 
     var windowElement: AXUIElement?
-    if let focused = copyAttribute(appElement, kAXFocusedWindowAttribute as String) as? AXUIElement {
+    if let rawFocused = copyAttribute(appElement, kAXFocusedWindowAttribute as String),
+       let focused = asAXUIElement(rawFocused) {
         windowElement = focused
     } else if let windows = copyAttribute(appElement, kAXWindowsAttribute as String) as? [AXUIElement],
               let first = windows.first {
@@ -239,8 +260,8 @@ func buildNode(_ element: AXUIElement, path: [Int]) -> [String: Any] {
 
     return [
         "ref": ref,
-        "role": role ?? NSNull(),
-        "name": name ?? NSNull(),
+        "role": orNull(role),
+        "name": orNull(name),
         "value": value,
         "enabled": enabled,
         "actions": actions,
@@ -269,12 +290,12 @@ func handleSnapshot() throws -> [String: Any] {
     let context = try getSnapshotContext()
     let tree = buildNode(context.root, path: [0])
     let windowInfo: [String: Any] = [
-        "title": context.windowTitle ?? NSNull(),
-        "role": context.windowRole ?? NSNull()
+        "title": orNull(context.windowTitle),
+        "role": orNull(context.windowRole)
     ]
     return [
         "app": [
-            "name": context.appName ?? NSNull(),
+            "name": orNull(context.appName),
             "pid": context.pid
         ],
         "window": windowInfo,
